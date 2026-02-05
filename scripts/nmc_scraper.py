@@ -10,58 +10,66 @@ supabase: Client = create_client(URL, KEY)
 
 async def run_scraper():
     async with async_playwright() as p:
+        print("🚀 Launching Browser...")
         browser = await p.chromium.launch(headless=True)
-        # Use a real user-agent to stay undetected
-        context = await browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-        page = await context.new_page()
+        page = await browser.new_page()
         
-        print("🚀 Navigating to NMC Portal...")
+        # 1. Navigate and Select Filters
+        print("🌍 Going to NMC website...")
         await page.goto("https://www.nmc.org.in/information-desk/college-and-course-search/", wait_until="networkidle")
-
-        # 1. Select 'All PG Courses'
-        # We target the ID courseName from the dropdown
-        await page.select_option('select#courseName', label="All PG Courses")
         
-        # 2. Click 'View Results'
+        # Select 'All PG Courses'
+        await page.select_option('select#courseName', label="All PG Courses")
+        # Click View Results
         await page.click('input[value="View Results"]')
         await page.wait_for_selector('table#course_table tbody tr', timeout=60000)
 
-        # 3. Optimize: Set 'Show 500 entries' to reduce page turns
+        # 2. Optimization: Show 500 entries to reduce page clicks
+        print("⚡ Optimizing view to 500 entries...")
         await page.select_option('select[name="course_table_length"]', "500")
-        await asyncio.sleep(3) # Wait for table to reload with 500 rows
+        await asyncio.sleep(4) # Allow time for table reload
 
         page_num = 1
         while True:
             print(f"📄 Scraping Page {page_num}...")
             rows = await page.query_selector_all('table#course_table tbody tr')
             
-            batch_data = []
             for row in rows:
                 cols = await row.query_selector_all('td')
                 if len(cols) >= 6:
-                    # Column 5 contains 'Name and Address of Medical College'
-                    name_raw = await cols[4].inner_text()
-                    # Column 4 contains 'Select a State'
-                    state_raw = await cols[3].inner_text()
-                    
-                    batch_data.append({
-                        "name": name_raw.strip(),
-                        "state": state_raw.strip()
-                    })
+                    # Extract Data
+                    course_name = await cols[1].inner_text()
+                    state_name = await cols[3].inner_text()
+                    college_name = await cols[4].inner_text()
+                    mgmt_type = await cols[5].inner_text()
 
-            # 4. Upsert to Supabase
-            if batch_data:
-                supabase.table("colleges").upsert(batch_data, on_conflict="name,state").execute()
-            
-            # 5. Handle Pagination
-            # Check if the 'Next' button exists and is not disabled
+                    # A. Save College (Ignore duplicates)
+                    # We use .execute() to get the ID back immediately
+                    try:
+                        college_res = supabase.table("colleges").upsert({
+                            "name": college_name.strip(),
+                            "state": state_name.strip(),
+                            "management_type": mgmt_type.strip()
+                        }, on_conflict="name,state").execute()
+                        
+                        # B. Save Department linked to that College
+                        if college_res.data:
+                            c_id = college_res.data[0]['id']
+                            supabase.table("departments").upsert({
+                                "college_id": c_id,
+                                "dept_name": course_name.strip()
+                            }, on_conflict="college_id,dept_name").execute()
+                    except Exception as e:
+                        print(f"⚠️ Error on {college_name}: {e}")
+
+            # 3. Handle 'Next' Button
             next_btn = page.locator('a#course_table_next:not(.disabled)')
             if await next_btn.count() > 0:
                 await next_btn.click()
-                await asyncio.sleep(2) # Wait for page load
+                await asyncio.sleep(3) # Wait for next 500 rows to load
                 page_num += 1
             else:
-                print("🏁 Finished! All pages processed.")
+                print("🏁 All pages scraped!")
                 break
 
         await browser.close()
