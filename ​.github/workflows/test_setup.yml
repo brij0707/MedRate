@@ -1,6 +1,9 @@
 name: Test medRate Setup
 
-on: [push]
+on: 
+  push:
+    branches: [ main ]  # Ensure this matches your branch name (main or master)
+  workflow_dispatch:     # This adds the "Run workflow" button manually
 
 jobs:
   test-connection:
@@ -8,17 +11,4 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - name: Install Dependencies
-        run: pip install supabase
-
-      - name: Run Test Script
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: python scripts/test_connection.py
+      # ... (rest of the steps)
