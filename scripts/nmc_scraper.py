@@ -10,39 +10,44 @@ supabase: Client = create_client(URL, KEY)
 
 async def run_scraper():
     async with async_playwright() as p:
-        print("🚀 Launching Headless Browser...")
+        print("🚀 Launching Browser in Desktop Mode...")
         browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
         
-        # 1. Navigate
+        # FIX 1: Set a large Viewport (1920x1080) so filters aren't hidden
+        context = await browser.new_context(
+            viewport={'width': 1920, 'height': 1080},
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        )
+        page = await context.new_page()
+        
         print("🌍 Going to NMC website...")
-        # Increased timeout to 60s for slow connections
-        await page.goto("https://www.nmc.org.in/information-desk/college-and-course-search/", timeout=60000)
+        # Increased timeout to 90s just to be safe
+        await page.goto("https://www.nmc.org.in/information-desk/college-and-course-search/", timeout=90000)
         
-        # 2. THE CRITICAL FIX: Wait for the dropdown to actually exist
-        print("⏳ Waiting for search form...")
-        await page.wait_for_selector('select#courseName', state="visible", timeout=60000)
-
-        # 3. Now it is safe to select
+        # FIX 2: Wait for the Dropdown with a specific state check
+        print("⏳ Waiting for Course Dropdown...")
+        course_dropdown = page.locator('select#courseName')
+        await course_dropdown.wait_for(state="attached", timeout=60000)
+        
         print("✅ Selecting 'All PG Courses'...")
+        # Sometimes you need to force scroll to it
+        await course_dropdown.scroll_into_view_if_needed()
         await page.select_option('select#courseName', label="All PG Courses")
         
-        # 4. Click View Results
+        print("👆 Clicking View Results...")
         await page.click('input[value="View Results"]')
         
-        # 5. Wait for the TABLE to appear (Wait for results)
-        print("⏳ Waiting for results table...")
+        print("⏳ Waiting for Data Table...")
         await page.wait_for_selector('table#course_table tbody tr', timeout=60000)
 
-        # 6. Optimize View to 500 entries
+        # Optimize view to 500 entries
         print("⚡ Optimizing view to 500 entries...")
         await page.select_option('select[name="course_table_length"]', "500")
-        await asyncio.sleep(5) # Give it time to reload the big table
+        await asyncio.sleep(5) 
 
         page_num = 1
         while True:
             print(f"📄 Scraping Page {page_num}...")
-            # Re-query the rows every loop to avoid 'stale element' errors
             rows = await page.query_selector_all('table#course_table tbody tr')
             
             for row in rows:
@@ -53,15 +58,15 @@ async def run_scraper():
                     college = await cols[4].inner_text()
                     mgmt = await cols[5].inner_text()
 
-                    # Upsert College
                     try:
+                        # 1. Upsert College
                         res = supabase.table("colleges").upsert({
                             "name": college.strip(),
                             "state": state.strip(),
                             "management_type": mgmt.strip()
                         }, on_conflict="name,state").execute()
                         
-                        # Upsert Department
+                        # 2. Upsert Department
                         if res.data:
                             c_id = res.data[0]['id']
                             supabase.table("departments").upsert({
@@ -69,16 +74,16 @@ async def run_scraper():
                                 "dept_name": course.strip()
                             }, on_conflict="college_id,dept_name").execute()
                     except Exception as e:
-                        print(f"⚠️ Error syncing {college}: {e}")
+                        print(f"⚠️ Error: {e}")
 
-            # Pagination Logic
+            # Pagination
             next_btn = page.locator('a#course_table_next:not(.disabled)')
             if await next_btn.count() > 0:
                 await next_btn.click()
-                await asyncio.sleep(3) # Wait for next page load
+                await asyncio.sleep(3)
                 page_num += 1
             else:
-                print("🏁 Scrape Complete!")
+                print("🏁 All pages scraped!")
                 break
 
         await browser.close()
