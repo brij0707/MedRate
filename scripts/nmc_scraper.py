@@ -1,34 +1,64 @@
 import os
 import asyncio
 from playwright.async_api import async_playwright
+from supabase import create_client, Client
+
+# Initialize Supabase
+URL = os.environ.get("SUPABASE_URL")
+KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+supabase: Client = create_client(URL, KEY)
 
 async def run_scraper():
     async with async_playwright() as p:
-        # Launch browser with a real user agent to avoid being blocked
         browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+        context = await browser.new_context(user_agent="Mozilla/5.0")
         page = await context.new_page()
         
-        print("🚀 Navigating to NMC Portal...")
+        print("🚀 Navigating to NMC...")
         await page.goto("https://www.nmc.org.in/information-desk/college-and-course-search/", wait_until="networkidle")
 
-        # Step 1: Set filters to 'ALL' (Usually default, but we'll be explicit)
-        # The selectors are based on the standard NMC table search UI
-        print("🔍 Setting filters to 'ALL'...")
+        # 1. Select 'All PG Courses' from dropdown
+        await page.select_option('select#courseName', label="All PG Courses")
         
-        # Step 2: Click the 'View Results' button shown in your screenshot
-        # Using a more robust selector for that specific button
-        view_results_btn = page.locator('input[type="button"][value="View Results"]')
-        await view_results_btn.wait_for(state="visible")
-        await view_results_btn.click()
+        # 2. Click 'View Results'
+        await page.click('input[value="View Results"]')
+        await page.wait_for_selector('table#course_table tr', timeout=60000)
 
-        # Step 3: Wait for the results table to populate
-        print("⏳ Waiting for table to load...")
-        await page.wait_for_selector('table#course_table', timeout=60000)
+        # 3. Set 'Show 500 entries' to speed up
+        await page.select_option('select[name="course_table_length"]', "500")
+        await asyncio.sleep(2) # Give it a second to reload the 500 rows
 
-        # Step 4: Extract the rows
-        rows = await page.query_selector_all('table#course_table tr')
-        print(f"✅ Success! Found {len(rows)} entries in the table.")
+        has_next = True
+        page_num = 1
+
+        while has_next:
+            print(f"📄 Scraping Page {page_num}...")
+            rows = await page.query_selector_all('table#course_table tbody tr')
+            
+            college_data = []
+            for row in rows:
+                cols = await row.query_selector_all('td')
+                if len(cols) > 5:
+                    name = await cols[4].inner_text() # 'Name and Address' column
+                    state = await cols[3].inner_text() # 'Select a State' column
+                    college_data.append({
+                        "name": name.strip(),
+                        "state": state.strip()
+                    })
+
+            # Batch Upsert to Supabase
+            if college_data:
+                supabase.table("colleges").upsert(college_data, on_conflict="name,state").execute()
+            
+            # 4. Check for 'Next' button
+            next_btn = page.locator('a#course_table_next:not(.disabled)')
+            if await next_btn.count() > 0:
+                await next_btn.click()
+                await asyncio.sleep(2) # Wait for table refresh
+                page_num += 1
+            else:
+                has_next = False
+                print("🏁 All pages scraped successfully.")
 
         await browser.close()
 
