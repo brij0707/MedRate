@@ -6,3 +6,4 @@ geopy
 supabase
 playwright
 beautifulsoup4
+pdfplumber
