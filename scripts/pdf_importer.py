@@ -25,28 +25,28 @@ def import_pdf_data():
             if not table: continue
 
             for row in table:
-                # Safety check for empty rows or headers
+                # Ensure row has at least 3 columns (State, College, Course)
                 if not row or len(row) < 3: continue
                 
-                # Map columns based on your screenshot
+                # Map columns based on your PDF
                 state_val = row[0]
                 college_val = row[1]
                 course_val = row[2]
 
-                # Skip header row or empty data
+                # Skip header row ('STATE') or empty data
                 if state_val == "STATE" or not college_val:
                     continue
 
                 try:
-                    # 1. Upsert College
-                    # Note: Your PDF doesn't have 'Type', so we default to 'Unknown'
+                    # 1. Upsert College (State + College Name)
+                    # We default 'management_type' to 'Unknown' since it's not in this PDF
                     c_res = supabase.table("colleges").upsert({
                         "name": college_val.strip(),
                         "state": state_val.strip(),
                         "management_type": "Unknown" 
                     }, on_conflict="name,state").execute()
                     
-                    # 2. Upsert Department
+                    # 2. Upsert Department (Course Name) linked to the College
                     if c_res.data:
                         c_id = c_res.data[0]['id']
                         supabase.table("departments").upsert({
@@ -58,7 +58,7 @@ def import_pdf_data():
                 except Exception as e:
                     print(f"⚠️ Row Error: {e}")
 
-    print(f"✅ SUCCESS! Imported {count_depts} departments.")
+    print(f"✅ SUCCESS! Imported {count_depts} courses.")
 
 if __name__ == "__main__":
     import_pdf_data()
