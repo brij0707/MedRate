@@ -15,57 +15,50 @@ def import_pdf_data():
         return
 
     print("📖 Opening PDF...")
-    
-    count_colleges = 0
     count_depts = 0
 
     with pdfplumber.open(pdf_path) as pdf:
-        # Loop through every page in the PDF
         for i, page in enumerate(pdf.pages):
-            print(f"📄 Processing Page {i+1}...")
-            
-            # Extract the table from the page
+            print(f"Processing Page {i+1}...")
             table = page.extract_table()
             
-            if not table:
-                continue
+            if not table: continue
 
             for row in table:
-                # Filter out empty rows or headers
-                # Based on your image: Col 0=State, Col 1=College, Col 2=Course
-                if len(row) > 2 and row[0] != "STATE" and row[0] is not None:
+                # Safety check for empty rows or headers
+                if not row or len(row) < 3: continue
+                
+                # Map columns based on your screenshot
+                state_val = row[0]
+                college_val = row[1]
+                course_val = row[2]
+
+                # Skip header row or empty data
+                if state_val == "STATE" or not college_val:
+                    continue
+
+                try:
+                    # 1. Upsert College
+                    # Note: Your PDF doesn't have 'Type', so we default to 'Unknown'
+                    c_res = supabase.table("colleges").upsert({
+                        "name": college_val.strip(),
+                        "state": state_val.strip(),
+                        "management_type": "Unknown" 
+                    }, on_conflict="name,state").execute()
                     
-                    state_val = row[0]
-                    college_val = row[1]
-                    course_val = row[2] # This is the Department
+                    # 2. Upsert Department
+                    if c_res.data:
+                        c_id = c_res.data[0]['id']
+                        supabase.table("departments").upsert({
+                            "college_id": c_id,
+                            "dept_name": course_val.strip()
+                        }, on_conflict="college_id,dept_name").execute()
+                        count_depts += 1
 
-                    # Skip if data is empty (sometimes happens with bad formatting)
-                    if not college_val or not course_val:
-                        continue
+                except Exception as e:
+                    print(f"⚠️ Row Error: {e}")
 
-                    try:
-                        # 1. Upsert College
-                        # Since PDF doesn't have "Type", we default to "Unknown" for now
-                        college_res = supabase.table("colleges").upsert({
-                            "name": college_val.strip(),
-                            "state": state_val.strip(),
-                            "management_type": "Unknown" 
-                        }, on_conflict="name,state").execute()
-                        
-                        if college_res.data:
-                            # 2. Upsert Department
-                            c_id = college_res.data[0]['id']
-                            supabase.table("departments").upsert({
-                                "college_id": c_id,
-                                "dept_name": course_val.strip()
-                            }, on_conflict="college_id,dept_name").execute()
-                            
-                            count_depts += 1
-
-                    except Exception as e:
-                        print(f"⚠️ Error on row: {row} -> {e}")
-
-    print(f"✅ DONE! Imported {count_depts} departments from PDF.")
+    print(f"✅ SUCCESS! Imported {count_depts} departments.")
 
 if __name__ == "__main__":
     import_pdf_data()
