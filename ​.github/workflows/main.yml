@@ -2,10 +2,10 @@ name: medRate_Master_Workflow
 
 on:
   push:
-    branches: [ "main" ]    # Immediate test upon code push
+    branches: [ "main" ]
   schedule:
-    - cron: '0 0 1 * *'    # Monthly automated run
-  workflow_dispatch:        # Manual "Run" button in GitHub UI
+    - cron: '0 0 1 * *'
+  workflow_dispatch:
 
 jobs:
   engine:
