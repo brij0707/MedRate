@@ -1,21 +1,21 @@
-name: Monthly medRate Data Update
+name: medRate_Master_Workflow
 
 on:
-  schedule:
-    - cron: '0 0 1 * *'  # Runs at 00:00 on the 1st of every month
-  workflow_dispatch:      # This adds the manual "Run" button in the Actions tab
   push:
-    branches: [ main ]    # Triggers every time you push to the main branch
+    branches: [ "main" ]    # Immediate test upon code push
+  schedule:
+    - cron: '0 0 1 * *'    # Monthly automated run
+  workflow_dispatch:        # Manual "Run" button in GitHub UI
 
 jobs:
-  scrape:
+  engine:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
@@ -24,7 +24,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Install Playwright Browsers
+      - name: Install Playwright
         run: playwright install --with-deps chromium
 
       - name: Run Scraper
@@ -32,4 +32,3 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python scripts/nmc_scraper.py
-
