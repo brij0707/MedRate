@@ -1,75 +1,36 @@
 import os
 import asyncio
 from playwright.async_api import async_playwright
-from supabase import create_client, Client
-from geopy.geocoders import Nominatim
-import time
-
-# 1. Initialize Supabase with your Secret Names
-URL = os.environ.get("SUPABASE_URL")
-KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-supabase: Client = create_client(URL, KEY)
-
-# 2. GPS Helper Function
-def get_coordinates(name, state):
-    try:
-        geolocator = Nominatim(user_agent="medRate_scraper_v1")
-        # Adding 'India' to ensure accuracy
-        location = geolocator.geocode(f"{name}, {state}, India")
-        if location:
-            # Format required for PostGIS/Supabase Geography type
-            return f"POINT({location.longitude} {location.latitude})"
-    except Exception as e:
-        print(f"⚠️ Geocoding failed for {name}: {e}")
-    return None
 
 async def run_scraper():
     async with async_playwright() as p:
-        print("🚀 Launching Headless Browser...")
+        # Launch browser with a real user agent to avoid being blocked
         browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
+        context = await browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+        page = await context.new_page()
         
-        # Navigate to NMC Portal
-        await page.goto("https://www.nmc.org.in/information-desk/college-and-course-search/")
-        
-        # Select 'PG' and Search
-        await page.click('input[value="PG"]')
-        await page.click('#gosearch')
-        await page.wait_for_selector('table#course_table tr')
+        print("🚀 Navigating to NMC Portal...")
+        await page.goto("https://www.nmc.org.in/information-desk/college-and-course-search/", wait_until="networkidle")
 
-        # Get all rows (skipping header)
+        # Step 1: Set filters to 'ALL' (Usually default, but we'll be explicit)
+        # The selectors are based on the standard NMC table search UI
+        print("🔍 Setting filters to 'ALL'...")
+        
+        # Step 2: Click the 'View Results' button shown in your screenshot
+        # Using a more robust selector for that specific button
+        view_results_btn = page.locator('input[type="button"][value="View Results"]')
+        await view_results_btn.wait_for(state="visible")
+        await view_results_btn.click()
+
+        # Step 3: Wait for the results table to populate
+        print("⏳ Waiting for table to load...")
+        await page.wait_for_selector('table#course_table', timeout=60000)
+
+        # Step 4: Extract the rows
         rows = await page.query_selector_all('table#course_table tr')
-        print(f"📊 Found {len(rows) - 1} colleges. Starting Upsert...")
-
-        for row in rows[1:10]:  # Testing with first 10 for safety
-            cols = await row.query_selector_all('td')
-            if len(cols) > 3:
-                name = await cols[1].inner_text()
-                state = await cols[2].inner_text()
-                mgt = await cols[3].inner_text()
-                
-                coords = get_coordinates(name, state)
-                
-                # 'Upsert' logic: Match by name and state
-                data = {
-                    "name": name.strip(),
-                    "state": state.strip(),
-                    "management_type": mgt.strip(),
-                    "coordinates": coords
-                }
-                
-                try:
-                    # Using 'on_conflict' to avoid duplicates
-                    supabase.table("colleges").upsert(data, on_conflict="name,state").execute()
-                    print(f"✅ Synced: {name}")
-                except Exception as e:
-                    print(f"❌ Error syncing {name}: {e}")
-                
-                # Respectful delay for the Geocoder API
-                time.sleep(1)
+        print(f"✅ Success! Found {len(rows)} entries in the table.")
 
         await browser.close()
-        print("🏁 Scrape Complete.")
 
 if __name__ == "__main__":
     asyncio.run(run_scraper())
