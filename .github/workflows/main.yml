@@ -1,10 +1,10 @@
-name: medRate_PDF_Import
+name: medRate_Debug
 
 on:
-  workflow_dispatch: # Creates the manual "Run workflow" button
+  workflow_dispatch:
 
 jobs:
-  import_job:
+  debug_job:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -16,10 +16,7 @@ jobs:
           python-version: '3.10'
 
       - name: Install Dependencies
-        run: pip install -r requirements.txt
+        run: pip install pdfplumber
 
-      - name: Run PDF Importer
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: python scripts/pdf_importer.py
+      - name: Run Debugger
+        run: python scripts/debug_pdf.py
