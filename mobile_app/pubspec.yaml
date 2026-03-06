@@ -1,12 +1,48 @@
-name: medrate_app
-description: A medical residency rating platform.
-version: 1.0.0+1
-environment:
-  sdk: ">=3.0.0 <4.0.0"
-dependencies:
-  flutter:
-    sdk: flutter
-  supabase_flutter: ^2.0.0  # To talk to your database
-  google_generative_ai: ^0.4.0 # For the AI Sanitizer
-  fl_chart: ^0.66.0
+name: Build MedRate Beta APK
+on: 
+  push:
+    branches: [ main ]
 
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # This line tells GitHub all commands happen inside the mobile_app folder
+    defaults:
+      run:
+        working-directory: mobile_app
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.0'
+          channel: 'stable'
+
+      - name: Inject Secrets into Config
+        run: |
+          echo "class AppConfig {
+            static const String geminiApiKey = '${{ secrets.GEMINI_API_KEY }}';
+            static const String supabaseUrl = '${{ secrets.SUPABASE_URL }}';
+            static const String supabaseAnonKey = '${{ secrets.SUPABASE_ANON_KEY }}';
+          }" > lib/config.dart
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Build Debug APK
+        run: flutter build apk --debug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: medrate-beta-app
+          path: mobile_app/build/app/outputs/flutter-apk/app-debug.apk
