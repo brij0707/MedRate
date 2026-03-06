@@ -1,0 +1,11 @@
+name: medrate_app
+description: A medical residency rating platform.
+version: 1.0.0+1
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+dependencies:
+  flutter:
+    sdk: flutter
+  supabase_flutter: ^2.0.0  # To talk to your database
+  google_generative_ai: ^0.4.0 # For the AI Sanitizer
+
