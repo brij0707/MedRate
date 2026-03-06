@@ -1,0 +1,45 @@
+name: Build MedRate Beta APK
+on: 
+  push:
+    branches: [ main ] # Triggers every time you commit to main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.0'
+          channel: 'stable'
+
+      - name: Inject Secrets into Config
+        # This creates the lib/config.dart file dynamically so secrets stay off GitHub
+        run: |
+          echo "class AppConfig {
+            static const String geminiApiKey = '${{ secrets.GEMINI_API_KEY }}';
+            static const String supabaseUrl = '${{ secrets.SUPABASE_URL }}';
+            static const String supabaseAnonKey = '${{ secrets.SUPABASE_ANON_KEY }}';
+          }" > lib/config.dart
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Build Debug APK
+        # Debug APK is better for Beta testing as it doesn't require signing keys yet
+        run: flutter build apk --debug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: medrate-beta-app
+          path: build/app/outputs/flutter-apk/app-debug.apk
