@@ -22,14 +22,16 @@ jobs:
           flutter-version: '3.19.0'
           channel: 'stable'
 
+ 
       - name: Inject Secrets into Config
-        # This creates the lib/config.dart file dynamically so secrets stay off GitHub
+        working-directory: mobile_app # Add this line here
         run: |
           echo "class AppConfig {
             static const String geminiApiKey = '${{ secrets.GEMINI_API_KEY }}';
             static const String supabaseUrl = '${{ secrets.SUPABASE_URL }}';
             static const String supabaseAnonKey = '${{ secrets.SUPABASE_ANON_KEY }}';
           }" > lib/config.dart
+
 
       - name: Install Dependencies
         run: flutter pub get
