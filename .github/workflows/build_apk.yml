@@ -7,6 +7,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile_app
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -24,25 +28,25 @@ jobs:
           channel: 'stable'
 
       - name: Inject Secrets into Config
-        # This targets the lib folder inside your mobile_app directory
         run: |
           echo "class AppConfig {
             static const String geminiApiKey = '${{ secrets.GEMINI_API_KEY }}';
             static const String supabaseUrl = '${{ secrets.SUPABASE_URL }}';
             static const String supabaseAnonKey = '${{ secrets.SUPABASE_ANON_KEY }}';
-          }" > "mobile_app/lib/config.dart"
+          }" > lib/config.dart
 
       - name: Install Dependencies
-        working-directory: mobile_app
         run: flutter pub get
 
+      - name: Repair Android Files
+        # This force-generates the missing Gradle files for your project
+        run: flutter create . --platforms android
+
       - name: Build Debug APK
-        working-directory: mobile_app
         run: flutter build apk --debug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: medrate-beta-app
-          # The path must be absolute from the repo root
           path: mobile_app/build/app/outputs/flutter-apk/app-debug.apk
