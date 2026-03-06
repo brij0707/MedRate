@@ -1,48 +1,22 @@
-name: Build MedRate Beta APK
-on: 
-  push:
-    branches: [ main ]
+name: medrate
+description: A medical residency verification and rating app.
+publish_to: 'none'
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    # This line tells GitHub all commands happen inside the mobile_app folder
-    defaults:
-      run:
-        working-directory: mobile_app
+# This section fixes the "Exit Code 65" by defining the Dart version
+environment:
+  sdk: ">=3.0.0 <4.0.0"
 
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+dependencies:
+  flutter:
+    sdk: flutter
+  supabase_flutter: ^2.0.0
+  google_generative_ai: ^0.2.0
+  fl_chart: ^0.66.0
 
-      - name: Setup Java
-        uses: actions/setup-java@v3
-        with:
-          distribution: 'zulu'
-          java-version: '17'
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
 
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.19.0'
-          channel: 'stable'
-
-      - name: Inject Secrets into Config
-        run: |
-          echo "class AppConfig {
-            static const String geminiApiKey = '${{ secrets.GEMINI_API_KEY }}';
-            static const String supabaseUrl = '${{ secrets.SUPABASE_URL }}';
-            static const String supabaseAnonKey = '${{ secrets.SUPABASE_ANON_KEY }}';
-          }" > lib/config.dart
-
-      - name: Install Dependencies
-        run: flutter pub get
-
-      - name: Build Debug APK
-        run: flutter build apk --debug
-
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: medrate-beta-app
-          path: mobile_app/build/app/outputs/flutter-apk/app-debug.apk
+flutter:
+  uses-material-design: true
