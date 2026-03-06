@@ -8,4 +8,5 @@ dependencies:
     sdk: flutter
   supabase_flutter: ^2.0.0  # To talk to your database
   google_generative_ai: ^0.4.0 # For the AI Sanitizer
+  fl_chart: ^0.66.0
 
