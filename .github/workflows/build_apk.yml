@@ -1,14 +1,22 @@
 name: Build MedRate Beta APK
 on: 
   push:
-    branches: [ main ] # Triggers every time you commit to main
+    branches: [ main ]
+  workflow_dispatch: # Allows you to trigger the build manually
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    # This ensures EVERY step below runs inside the mobile_app folder
+    defaults:
+      run:
+        working-directory: mobile_app
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          sparse-checkout: . # Ensures it pulls everything
 
       - name: Setup Java
         uses: actions/setup-java@v3
@@ -22,9 +30,7 @@ jobs:
           flutter-version: '3.19.0'
           channel: 'stable'
 
- 
       - name: Inject Secrets into Config
-        working-directory: mobile_app # Add this line here
         run: |
           echo "class AppConfig {
             static const String geminiApiKey = '${{ secrets.GEMINI_API_KEY }}';
@@ -32,16 +38,15 @@ jobs:
             static const String supabaseAnonKey = '${{ secrets.SUPABASE_ANON_KEY }}';
           }" > lib/config.dart
 
-
       - name: Install Dependencies
         run: flutter pub get
 
       - name: Build Debug APK
-        # Debug APK is better for Beta testing as it doesn't require signing keys yet
         run: flutter build apk --debug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: medrate-beta-app
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          # Note: Path is relative to the root of the repo, not the working-dir
+          path: mobile_app/build/app/outputs/flutter-apk/app-debug.apk
