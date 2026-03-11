@@ -39,8 +39,10 @@ jobs:
         run: flutter pub get
 
       - name: Repair Android Files
-        # This force-generates the missing Gradle files for your project
-        run: flutter create . --platforms android
+        run: |
+          flutter create . --platforms android
+          # This line forces the Internet Permission into the newly created manifest
+          sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
 
       - name: Build Debug APK
         run: flutter build apk --debug
