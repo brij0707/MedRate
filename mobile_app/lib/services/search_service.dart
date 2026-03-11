@@ -10,7 +10,7 @@ class SearchService {
     try {
       // Searches name, state, and course_name simultaneously
       final response = await _supabase
-          .from('college_directory') 
+          .from('colleges') 
           .select()
           .or('college_name.ilike.%$query%,state.ilike.%$query%,course_name.ilike.%$query%')
           .limit(20); // Limit for mobile performance
